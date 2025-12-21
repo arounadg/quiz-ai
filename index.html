@@ -1,1 +1,145 @@
-yy
+!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>AI Quiz Assistant</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+
+<style>
+body {
+  margin: 0;
+  background: #0b0b0b;
+  color: white;
+  font-family: Arial, sans-serif;
+  text-align: center;
+}
+#video {
+  width: 100%;
+  height: 100vh;
+  object-fit: cover;
+}
+#overlay {
+  position: fixed;
+  bottom: 20px;
+  width: 100%;
+  text-align: center;
+}
+button {
+  padding: 15px 25px;
+  font-size: 18px;
+  border-radius: 10px;
+  border: none;
+  background: #00e676;
+  color: black;
+}
+#result {
+  font-size: 150px; /* très grand caractère */
+  font-weight: bold;
+  margin-top: 20px;
+  color: #00e676; /* vert */
+  animation: blink 1s infinite; /* clignotement */
+}
+
+/* Animation clignotante */
+@keyframes blink {
+  0%, 50%, 100% { opacity: 1; }
+  25%, 75% { opacity: 0; }
+}
+</style>
+</head>
+
+<body>
+
+<video id="video" autoplay muted></video>
+
+<div id="overlay">
+  <button onclick="startCamera()">📷 Activer la caméra</button>
+  <div id="result"></div>
+</div>
+
+<script>
+let video = document.getElementById("video");
+let resultDiv = document.getElementById("result");
+let streamStarted = false;
+
+// CACHE local pour mémoriser les réponses
+let cache = {};
+
+// TA CLÉ GRATUITE HUGGING FACE
+const HF_KEY = "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";
+
+async function startCamera() {
+  if (streamStarted) return;
+  streamStarted = true;
+
+  const stream = await navigator.mediaDevices.getUserMedia({
+    video: { facingMode: "environment" }
+  });
+  video.srcObject = stream;
+
+  setInterval(scanFrame, 2000); // toutes les 2 secondes
+}
+
+async function scanFrame() {
+  if (!video.videoWidth) return;
+
+  const canvas = document.createElement("canvas");
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(video, 0, 0);
+
+  const { data: { text } } = await Tesseract.recognize(canvas, "fra+eng");
+
+  if (text.length < 10) return;
+
+  analyzeWithAI(text);
+}
+
+async function analyzeWithAI(text) {
+  if (cache[text]) {
+    showResult(cache[text]);
+    return;
+  }
+
+  resultDiv.innerHTML = "⏳ ...";
+
+  try {
+    const response = await fetch(
+      "https://api-inference.huggingface.co/models/google/flan-t5-large",
+      {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${HF_KEY}`, // Backticks non nécessaires ici car c’est une variable constante
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          inputs: `Question de quiz : ${text}\nDonne uniquement la lettre correcte : A, B, C, D, E, F ou G`
+        })
+      }
+    );
+
+    const data = await response.json();
+
+    const answerRaw = data?.[0]?.generated_text || "?";
+    const match = answerRaw.match(/[A-G]/i);
+    const filteredAnswer = match ? match[0].toUpperCase() : "?";
+
+    cache[text] = filteredAnswer;
+
+    showResult(filteredAnswer);
+
+  } catch(err) {
+    console.error(err);
+    resultDiv.innerHTML = "?";
+  }
+}
+
+function showResult(answer) {
+  resultDiv.innerText = answer;
+}
+</script>
+
+</body>
+</html>
