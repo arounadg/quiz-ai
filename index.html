@@ -2,120 +2,158 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<title>⚡ Quiz Camera FAST</title>
+<title>Quiz Cam Wiki</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<!-- OCR IA locale (sans API) -->
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 
 <style>
 body {
-  margin: 0;
-  background: black;
-  color: white;
-  font-family: Arial, sans-serif;
-  text-align: center;
+    background: #0f0f0f;
+    color: white;
+    font-family: Arial, sans-serif;
+    text-align: center;
+    margin: 0;
+}
+
+h2 {
+    margin-top: 10px;
 }
 
 video {
-  width: 100vw;
-  height: 70vh;
-  object-fit: cover;
-}
-
-#answer {
-  font-size: 80px;
-  font-weight: bold;
-  color: lime;
-  animation: blink 0.8s infinite;
-}
-
-@keyframes blink {
-  0% {opacity: 1;}
-  50% {opacity: 0.2;}
-  100% {opacity: 1;}
+    width: 100%;
+    max-width: 400px;
+    border-radius: 12px;
+    margin-top: 10px;
 }
 
 button {
-  padding: 15px 30px;
-  font-size: 18px;
-  background: #00e676;
-  border: none;
-  border-radius: 10px;
+    background: #00ff88;
+    border: none;
+    padding: 12px;
+    font-size: 16px;
+    border-radius: 10px;
+    margin-top: 10px;
+}
+
+#result {
+    margin-top: 15px;
+    font-size: 18px;
+}
+
+.good {
+    color: #00ff00;
+    font-size: 22px;
+    font-weight: bold;
 }
 </style>
 </head>
 
 <body>
 
-<h2>⚡ Quiz Camera FAST</h2>
+<h2>📸 Quiz Cam Wiki</h2>
 
-<video id="video" autoplay muted></video>
+<video id="video" autoplay playsinline></video>
+<canvas id="canvas" hidden></canvas>
 
 <br>
-<button onclick="startCamera()">📷 Activer la caméra</button>
+<button onclick="capture()">Scanner la question</button>
 
-<div id="answer"></div>
-
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<div id="result"></div>
 
 <script>
+// ===== 1. ACTIVER LA CAMÉRA =====
 const video = document.getElementById("video");
-const answerDiv = document.getElementById("answer");
+const canvas = document.getElementById("canvas");
+const result = document.getElementById("result");
 
-async function startCamera() {
-  const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-  video.srcObject = stream;
+navigator.mediaDevices.getUserMedia({
+    video: { facingMode: "environment" }
+}).then(stream => {
+    video.srcObject = stream;
+}).catch(() => {
+    alert("Autorise la caméra");
+});
 
-  setInterval(scanText, 3000);
+// ===== 2. PRENDRE LA PHOTO =====
+function capture() {
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext("2d").drawImage(video, 0, 0);
+    result.innerHTML = "⏳ Analyse OCR...";
+    readText();
 }
 
-async function scanText() {
-  const canvas = document.createElement("canvas");
-  canvas.width = video.videoWidth;
-  canvas.height = video.videoHeight;
-
-  const ctx = canvas.getContext("2d");
-  ctx.drawImage(video, 0, 0);
-
-  const result = await Tesseract.recognize(canvas, "fra");
-  const text = result.data.text.toLowerCase();
-
-  detectAnswer(text);
+// ===== 3. OCR (LECTURE DU TEXTE) =====
+function readText() {
+    Tesseract.recognize(canvas, "fra").then(res => {
+        analyzeText(res.data.text);
+    }).catch(() => {
+        result.innerText = "Erreur OCR";
+    });
 }
 
-function detectAnswer(text) {
+// ===== 4. ANALYSE A B C D =====
+function analyzeText(text) {
+    const lines = text.split("\n").map(l => l.trim()).filter(l => l);
+    let question = "";
+    let A="", B="", C="", D="";
 
-  // 🧠 SCIENCE
-  if (text.includes("minute") && text.includes("seconde")) return show("A");
-  if (text.includes("eau") && text.includes("formule")) return show("H₂O");
-  if (text.includes("planète") && text.includes("rouge")) return show("Mars");
-  if (text.includes("soleil") && text.includes("proche")) return show("Mercure");
-  if (text.includes("eau") && text.includes("bouillir")) return show("100°C");
-  if (text.includes("os") && text.includes("humain")) return show("206");
+    lines.forEach(line => {
+        if (line.startsWith("A")) A = line;
+        else if (line.startsWith("B")) B = line;
+        else if (line.startsWith("C")) C = line;
+        else if (line.startsWith("D")) D = line;
+        else question += line + " ";
+    });
 
-  // ➕ MATH
-  if (text.match(/\d+\s*\+\s*\d+/)) return show("A");
-  if (text.match(/\d+\s*\×\s*\d+/)) return show("A");
+    if (!question) {
+        result.innerText = "Question non détectée";
+        return;
+    }
 
-  // 🌍 GÉNÉRAL
-  if (text.includes("capitale") && text.includes("france")) return show("Paris");
-  if (text.includes("afrique") && text.includes("plus grand")) return show("Algérie");
-
-  // 🟢 DEFAULT INTELLIGENT
-  autoPick(text);
+    searchWikipedia(question, A, B, C, D);
 }
 
-function autoPick(text) {
-  if (text.includes("a")) return show("A");
-  if (text.includes("b")) return show("B");
-  if (text.includes("c")) return show("C");
-  if (text.includes("d")) return show("D");
-  if (text.includes("e")) return show("E");
-  if (text.includes("f")) return show("F");
-  if (text.includes("g")) return show("G");
+// ===== 5. WIKIPÉDIA (SANS API) =====
+function searchWikipedia(question, A, B, C, D) {
+    result.innerHTML = "🔎 Recherche Wikipédia...";
 
-  show("❌");
+    const url = "https://fr.wikipedia.org/api/rest_v1/page/summary/" +
+                encodeURIComponent(question);
+
+    fetch(url)
+    .then(res => res.json())
+    .then(data => {
+        const wikiText = JSON.stringify(data).toLowerCase();
+
+        const scores = {
+            A: count(wikiText, A),
+            B: count(wikiText, B),
+            C: count(wikiText, C),
+            D: count(wikiText, D)
+        };
+
+        const best = Object.keys(scores).reduce((a, b) =>
+            scores[a] > scores[b] ? a : b
+        );
+
+        result.innerHTML = `
+            <div class="good">⭕ Réponse probable : ${best}</div>
+            <div>${A}<br>${B}<br>${C}<br>${D}</div>
+        `;
+    })
+    .catch(() => {
+        result.innerText = "Wikipédia introuvable";
+    });
 }
 
-function show(val) {
-  answerDiv.innerText = val;
+// ===== 6. COMPTAGE DES MOTS =====
+function count(text, word) {
+    if (!word) return 0;
+    const w = word.toLowerCase();
+    return (text.match(new RegExp(w, "g")) || []).length;
 }
 </script>
 
