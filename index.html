@@ -2,158 +2,65 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<title>Quiz Cam Wiki</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-<!-- OCR IA locale (sans API) -->
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-
+<title>Caméra HD</title>
 <style>
 body {
-    background: #0f0f0f;
-    color: white;
-    font-family: Arial, sans-serif;
-    text-align: center;
-    margin: 0;
+  text-align: center;
+  background: #111;
+  color: white;
+  font-family: Arial;
 }
-
-h2 {
-    margin-top: 10px;
+video, canvas {
+  border-radius: 15px;
+  margin-top: 10px;
+  max-width: 100%;
 }
-
-video {
-    width: 100%;
-    max-width: 400px;
-    border-radius: 12px;
-    margin-top: 10px;
-}
-
 button {
-    background: #00ff88;
-    border: none;
-    padding: 12px;
-    font-size: 16px;
-    border-radius: 10px;
-    margin-top: 10px;
-}
-
-#result {
-    margin-top: 15px;
-    font-size: 18px;
-}
-
-.good {
-    color: #00ff00;
-    font-size: 22px;
-    font-weight: bold;
+  padding: 12px 20px;
+  font-size: 18px;
+  border-radius: 10px;
+  border: none;
+  background: #00ffcc;
+  margin-top: 10px;
 }
 </style>
 </head>
-
 <body>
 
-<h2>📸 Quiz Cam Wiki</h2>
+<h2>📸 Caméra numérique web</h2>
 
 <video id="video" autoplay playsinline></video>
-<canvas id="canvas" hidden></canvas>
-
 <br>
-<button onclick="capture()">Scanner la question</button>
-
-<div id="result"></div>
+<button onclick="takePhoto()">Prendre photo</button>
+<br>
+<canvas id="canvas"></canvas>
 
 <script>
-// ===== 1. ACTIVER LA CAMÉRA =====
 const video = document.getElementById("video");
 const canvas = document.getElementById("canvas");
-const result = document.getElementById("result");
+const ctx = canvas.getContext("2d");
 
 navigator.mediaDevices.getUserMedia({
-    video: { facingMode: "environment" }
+  video: {
+    width: { ideal: 1920 },
+    height: { ideal: 1080 },
+    facingMode: "user"
+  }
 }).then(stream => {
-    video.srcObject = stream;
-}).catch(() => {
-    alert("Autorise la caméra");
+  video.srcObject = stream;
 });
 
-// ===== 2. PRENDRE LA PHOTO =====
-function capture() {
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    canvas.getContext("2d").drawImage(video, 0, 0);
-    result.innerHTML = "⏳ Analyse OCR...";
-    readText();
-}
+function takePhoto() {
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
 
-// ===== 3. OCR (LECTURE DU TEXTE) =====
-function readText() {
-    Tesseract.recognize(canvas, "fra").then(res => {
-        analyzeText(res.data.text);
-    }).catch(() => {
-        result.innerText = "Erreur OCR";
-    });
-}
+  ctx.filter = "contrast(110%) brightness(105%) saturate(110%)";
+  ctx.drawImage(video, 0, 0);
 
-// ===== 4. ANALYSE A B C D =====
-function analyzeText(text) {
-    const lines = text.split("\n").map(l => l.trim()).filter(l => l);
-    let question = "";
-    let A="", B="", C="", D="";
-
-    lines.forEach(line => {
-        if (line.startsWith("A")) A = line;
-        else if (line.startsWith("B")) B = line;
-        else if (line.startsWith("C")) C = line;
-        else if (line.startsWith("D")) D = line;
-        else question += line + " ";
-    });
-
-    if (!question) {
-        result.innerText = "Question non détectée";
-        return;
-    }
-
-    searchWikipedia(question, A, B, C, D);
-}
-
-// ===== 5. WIKIPÉDIA (SANS API) =====
-function searchWikipedia(question, A, B, C, D) {
-    result.innerHTML = "🔎 Recherche Wikipédia...";
-
-    const url = "https://fr.wikipedia.org/api/rest_v1/page/summary/" +
-                encodeURIComponent(question);
-
-    fetch(url)
-    .then(res => res.json())
-    .then(data => {
-        const wikiText = JSON.stringify(data).toLowerCase();
-
-        const scores = {
-            A: count(wikiText, A),
-            B: count(wikiText, B),
-            C: count(wikiText, C),
-            D: count(wikiText, D)
-        };
-
-        const best = Object.keys(scores).reduce((a, b) =>
-            scores[a] > scores[b] ? a : b
-        );
-
-        result.innerHTML = `
-            <div class="good">⭕ Réponse probable : ${best}</div>
-            <div>${A}<br>${B}<br>${C}<br>${D}</div>
-        `;
-    })
-    .catch(() => {
-        result.innerText = "Wikipédia introuvable";
-    });
-}
-
-// ===== 6. COMPTAGE DES MOTS =====
-function count(text, word) {
-    if (!word) return 0;
-    const w = word.toLowerCase();
-    return (text.match(new RegExp(w, "g")) || []).length;
+  let link = document.createElement("a");
+  link.download = "photo.png";
+  link.href = canvas.toDataURL("image/png");
+  link.click();
 }
 </script>
 
